@@ -5,6 +5,7 @@ Simulated virtual portfolio engine for tracking trades against real Polymarket r
 import logging
 import asyncio
 import aiohttp
+import json
 from src import config
 
 log = logging.getLogger("polybot")
@@ -55,30 +56,40 @@ async def sim_resolution_loop(portfolio: SimPortfolio) -> None:
                                 # Market is resolved. Find which token won.
                                 clob_ids = mkt.get("clobTokenIds", [])
                                 if isinstance(clob_ids, str):
-                                    import json
                                     clob_ids = json.loads(clob_ids)
                                     
-                                winning_token_id = None
-                                # For 5m markets, the Gamma API usually flags the closed/resolved state
-                                # To find the winner, we can check the recent API payout OR since it's an UP/DOWN market, 
-                                # usually when 'closed' is true, Polymarket sets the price of the winning token to 1.00 (or close) on CLI.
-                                # However, Gamma 'markets' object usually contains 'tokens' or we just check the 'active' edge.
-                                # Actually, Gamma API event returns `outcomes` and it updates the `price` field? No.
-                                # The most robust way is to query the specific condition resolution if it's on-chain.
-                                # Alternatively, we can assume the final state of the tokens if `closed` is True.
-                                # Let's fetch the CLOB price directly. The token at price 1.0 is the winner.
-                                try:
-                                    # Fallback to Clob API to check price of our token. If it's near 1, we won.
-                                    # If the market is resolved, CLOB midpoint disappears but we can check if we won using the Polymarket UI logic:
-                                    # Actually, Gamma API `markets[0]` has `resolvedBy` or `groupItemTitle` or we can just fetch /markets/:id directly.
-                                    pass
-                                except:
-                                    pass
+                                prices_raw = mkt.get("outcomePrices", "[]")
+                                if isinstance(prices_raw, str):
+                                    prices = json.loads(prices_raw)
+                                else:
+                                    prices = prices_raw
+                                    
+                                if not prices or len(prices) != len(clob_ids):
+                                    continue
                                 
-                                # Wait, in Gamma API, if a market is resolved, it adds `resolution_result` or `asset_status`.
-                                # Let's just track the `endDate`. The best way is to fetch the price at resolution.
-                                # Simplified for now: if closed, print notice. We need the winning outcome to payout.
-                                # On Polymarket, closed markets return `price: 1` or `price: 0` inside the outcomes.
+                                try:
+                                    idx = clob_ids.index(pos["token_id"])
+                                    win_prob = float(prices[idx])
+                                    
+                                    if win_prob >= 0.99:
+                                        payout = pos["shares"] * 1.0
+                                        profit = payout - pos["cost"]
+                                        portfolio.balance += payout
+                                        log.info("=========== [SIM PAYOUT] ===========")
+                                        log.info("[SIM] Market %s RESOLVED YES!", pos["market_id"][-4:])
+                                        log.info("[SIM] WON +$%.2f! New Balance: $%.2f", profit, portfolio.balance)
+                                        log.info("====================================")
+                                    else:
+                                        profit = -pos["cost"]
+                                        log.info("=========== [SIM PAYOUT] ===========")
+                                        log.info("[SIM] Market %s RESOLVED NO!", pos["market_id"][-4:])
+                                        log.info("[SIM] LOST -$%.2f. New Balance: $%.2f", abs(profit), portfolio.balance)
+                                        log.info("====================================")
+                                        
+                                    pos["resolved"] = True
+                                    pos["pnl"] = profit
+                                except ValueError:
+                                    log.error("[SIM] Token ID not found in market %s", pos["market_id"])
                     except Exception as e:
                         log.debug("Resolution check error: %s", e)
             await asyncio.sleep(60.0)
