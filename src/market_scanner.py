@@ -117,6 +117,17 @@ async def market_discovery_loop(state: dict) -> None:
             active_window = await fetch_window(session, active_slug)
             next_window = await fetch_window(session, next_slug)
             
+            # --- CHAINLINK PRICE TO BEAT FIX ---
+            if active_window and active_window.price_to_beat == 0.0:
+                if now_ts >= active_window.start_date.timestamp():
+                    target_ts = int(active_window.start_date.timestamp())
+                    loop = asyncio.get_event_loop()
+                    from src.chainlink import fetch_historical_chainlink_btc_sync
+                    
+                    oracle_price = await loop.run_in_executor(None, fetch_historical_chainlink_btc_sync, target_ts)
+                    if oracle_price > 0:
+                        active_window.price_to_beat = oracle_price
+            
             old_active = state.get("active_window")
             if active_window and (not old_active or old_active.slug != active_window.slug):
                 log.info("Discovered active window: %s | closes %s UTC", 
@@ -126,6 +137,10 @@ async def market_discovery_loop(state: dict) -> None:
             if next_window and (not old_next or old_next.slug != next_window.slug):
                 log.info("Discovered next window: %s", next_window.slug)
             
+            # Preserve found PTB aggressively across passes
+            if active_window and active_window.price_to_beat == 0.0 and old_active and old_active.price_to_beat > 0:
+                active_window.price_to_beat = old_active.price_to_beat
+                
             # Update state safely
             state["active_window"] = active_window
             state["next_window"] = next_window
