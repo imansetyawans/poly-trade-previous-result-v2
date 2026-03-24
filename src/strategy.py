@@ -106,7 +106,7 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
             down_odds = state.get("down_odds", 0.0)
             price_to_beat = active_window.price_to_beat
             
-            if btc_price <= 0 or up_odds <= 0 or down_odds <= 0 or price_to_beat <= 0:
+            if btc_price <= 0 or price_to_beat <= 0 or up_odds < 0 or down_odds < 0:
                 log.warning("SIGNAL FAILED: Missing data (btc_price=%s, ptb=%s, up=%s, down=%s)", btc_price, price_to_beat, up_odds, down_odds)
                 last_signal_window = active_window.slug
                 continue

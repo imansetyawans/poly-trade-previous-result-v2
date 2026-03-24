@@ -16,11 +16,14 @@ async def odds_feed_loop(state: dict, client) -> None:
     
     while True:
         sec = state.get("seconds_to_close", 999)
+        force = state.get("force_odds_fetch", False)
         
         # Maximize RPC efficiency: Only fetch odds when within 10 seconds of market close
-        if sec > 10.0:
+        if sec > 10.0 and not force:
             await asyncio.sleep(1.0)
             continue
+            
+        state["force_odds_fetch"] = False
 
         window = state.get("active_window")
         if window and window.up_token_id and window.down_token_id:
