@@ -139,6 +139,8 @@ async def market_discovery_loop(state: dict) -> None:
             old_next = state.get("next_window")
             if next_window and (not old_next or old_next.slug != next_window.slug):
                 log.info("Discovered next window: %s", next_window.slug)
+                state["next_up_odds"] = 0.50
+                state["next_down_odds"] = 0.50
             
             # Preserve found PTB aggressively across passes for the SAME market
             if active_window and active_window.price_to_beat == 0.0 and old_active and old_active.slug == active_window.slug and old_active.price_to_beat > 0:

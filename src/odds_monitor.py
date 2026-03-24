@@ -25,29 +25,42 @@ async def odds_feed_loop(state: dict, client) -> None:
             
         state["force_odds_fetch"] = False
 
-        window = state.get("active_window")
-        if window and window.up_token_id and window.down_token_id:
+        active_window = state.get("active_window")
+        next_window = state.get("next_window")
+        
+        async def fetch_pair(win):
+            if not win or not win.up_token_id or not win.down_token_id:
+                return 0.0, 0.0
             try:
-                loop = asyncio.get_event_loop()
                 from functools import partial
+                loop = asyncio.get_event_loop()
+                up_price_task = loop.run_in_executor(None, partial(client.get_price, win.up_token_id, side="BUY"))
+                down_price_task = loop.run_in_executor(None, partial(client.get_price, win.down_token_id, side="BUY"))
+                up_resp, down_resp = await asyncio.gather(up_price_task, down_price_task)
                 
-                # Fetch live lowest ask (BUY side price) for exactly what we would pay
-                up_price_task = loop.run_in_executor(None, partial(client.get_price, window.up_token_id, side="BUY"))
-                down_price_task = loop.run_in_executor(None, partial(client.get_price, window.down_token_id, side="BUY"))
-                
-                up_price, down_price = await asyncio.gather(up_price_task, down_price_task)
+                up_p = float(up_resp.get("price", 0)) if isinstance(up_resp, dict) else float(up_resp or 0)
+                down_p = float(down_resp.get("price", 0)) if isinstance(down_resp, dict) else float(down_resp or 0)
+                return up_p, down_p
+            except:
+                return 0.0, 0.0
 
-                # Parse response
-                up_price = float(up_price.get("price", 0)) if isinstance(up_price, dict) else float(up_price or 0)
-                down_price = float(down_price.get("price", 0)) if isinstance(down_price, dict) else float(down_price or 0)
+        # Update active window odds
+        if active_window:
+            au, ad = await fetch_pair(active_window)
+            if au > 0: state["up_odds"] = au
+            if ad > 0: state["down_odds"] = ad
+            
+        # Update NEXT window odds (critical for execution pricing)
+        if sec < 15.0 and next_window:
+            nu, nd = await fetch_pair(next_window)
+            # Log for transparency in sim
+            if nu > 0 or nd > 0:
+                state["next_up_odds"] = nu if nu > 0 else 0.50
+                state["next_down_odds"] = nd if nd > 0 else 0.50
+            else:
+                # Default to 0.50 if the orderbook is not yet populated
+                state["next_up_odds"] = state.get("next_up_odds", 0.50)
+                state["next_down_odds"] = state.get("next_down_odds", 0.50)
 
-                if up_price > 0:
-                    state["up_odds"] = up_price
-                if down_price > 0:
-                    state["down_odds"] = down_price
-
-            except Exception as e:
-                log.warning("Odds fetch error: %s", e)
-                
-        # High frequency polling during the final 10 seconds
+        # Polling frequency
         await asyncio.sleep(0.5)

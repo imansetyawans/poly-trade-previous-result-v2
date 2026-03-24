@@ -145,15 +145,21 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
                 await asyncio.sleep(wait_time)
                 
             log.info("T-%.1fs TRIGGER: Executing FAK order for %s on %s...", EXECUTION_TRIGGER_SECONDS, signal_side, next_window.slug)
-            exec_ts = datetime.utcnow().isoformat()
+            exec_ts = datetime.now(timezone.utc).isoformat()
             
+            # Use the target market's actual odds for execution pricing
+            if signal_side == "UP":
+                execution_price = state.get("next_up_odds", 0.50)
+            else:
+                execution_price = state.get("next_down_odds", 0.50)
+                
             dry_run = state.get("dry_run", False)
             result = await submit_fak_order(
                 client=client, 
                 market_id=next_window.slug, 
                 token_id=target_token, 
                 trade_usd=TRADE_SIZE, 
-                expected_price=selected_odds, 
+                expected_price=execution_price, 
                 dry_run=dry_run, 
                 portfolio=portfolio
             )
@@ -164,6 +170,7 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
                 "next_market_id": next_window.slug,
                 "signal_side": signal_side,
                 "selected_odds": selected_odds,
+                "execution_price": execution_price,
                 "opposing_odds": opposing_odds,
                 "price_to_beat": price_to_beat,
                 "btc_price": btc_price,

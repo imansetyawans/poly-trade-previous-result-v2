@@ -35,7 +35,9 @@ async def print_state_loop(state: dict):
             info_str.append(f"Act: {act.slug[-4:]} (T-{sec:.1f}s, PTB=${ptb:,.2f}, Gap=${gap:.2f})")
             info_str.append(f"Odds: UP {up:.2f} / DN {dn:.2f}")
         if nxt:
-            info_str.append(f"Nxt: {nxt.slug[-4:]}")
+            n_up = state.get("next_up_odds", 0.0)
+            n_dn = state.get("next_down_odds", 0.0)
+            info_str.append(f"Nxt: {nxt.slug[-4:]} (Odds: {n_up:.2f}/{n_dn:.2f})")
             
         log.info(" | ".join(info_str))
         
@@ -54,6 +56,8 @@ async def run_bot(dry_run: bool = False):
         "btc_price": 0.0,
         "up_odds": 0.0,
         "down_odds": 0.0,
+        "next_up_odds": 0.50,
+        "next_down_odds": 0.50,
         "seconds_to_close": 999.0,
         "active_window": None,
         "next_window": None,

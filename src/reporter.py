@@ -16,6 +16,7 @@ FIELDNAMES = [
     "next_market_id",
     "signal_side",
     "selected_odds",
+    "execution_price",
     "opposing_odds",
     "price_to_beat",
     "btc_price",
