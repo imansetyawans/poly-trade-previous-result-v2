@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderArgs, OrderType
+from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
 from py_clob_client.order_builder.constants import BUY
 from src.reporter import log_trade
 from src import config
@@ -55,9 +55,12 @@ async def submit_fak_order(client: ClobClient, market_id: str, token_id: str, tr
                 side=BUY,
                 token_id=token_id
             )
-            # tick_size="0.01" is REQUIRED — without it the SDK uses raw float precision
-            # causing the Polymarket API to reject with 'invalid amounts' error
-            signed = client.create_order(order_args, options={"tick_size": "0.01", "neg_risk": False})
+            # tick_size is REQUIRED — tells SDK to enforce 2dp precision on maker amount
+            # Must use PartialCreateOrderOptions object, NOT a plain dict
+            signed = client.create_order(
+                order_args,
+                options=PartialCreateOrderOptions(tick_size="0.01", neg_risk=False)
+            )
             return client.post_order(signed, orderType=OrderType.FAK)
 
         t0 = time.time()
