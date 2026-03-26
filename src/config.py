@@ -45,12 +45,23 @@ EXECUTION_TRIGGER_SECONDS: float = float(os.getenv("EXECUTION_TRIGGER_SECONDS", 
 PRICE_GAP_THRESHOLD: float = float(os.getenv("PRICE_GAP_THRESHOLD", "50.0"))
 SIM_STARTING_BALANCE: float = float(os.getenv("SIM_STARTING_BALANCE", "60.0"))
 
+# === Advanced V2 Strategy Filters ===
+USE_SESSION_SHIELD: bool = os.getenv("USE_SESSION_SHIELD", "true").lower() == "true"
+TRADE_TIMEZONE: str = os.getenv("TRADE_TIMEZONE", "Asia/Bangkok")
+TRADE_START_TIME: str = os.getenv("TRADE_START_TIME", "07:00")
+TRADE_END_TIME: str = os.getenv("TRADE_END_TIME", "18:00")
+
+USE_CONFIRMATION_FILTER: bool = os.getenv("USE_CONFIRMATION_FILTER", "true").lower() == "true"
+
 # ── Contract Addresses (Polygon) required for Approvals ─────────
 USDC_ADDRESS: str = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 CONDITIONAL_TOKENS_ADDRESS: str = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 EXCHANGE_ADDRESS: str = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
 NEG_RISK_EXCHANGE_ADDRESS: str = "0xC5d563A36AE78145C45a50134d48A1215220f80a"
 NEG_RISK_ADAPTER_ADDRESS: str = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
+
+POSITION_POLL_INTERVAL: int = int(os.getenv("POSITION_POLL_INTERVAL", "60"))
+REDEEM_LOSSES: bool = os.getenv("REDEEM_LOSSES", "false").lower() == "true"
 
 def validate_trading_config() -> None:
     """Validate that required credentials are present."""

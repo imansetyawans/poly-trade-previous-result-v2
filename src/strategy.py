@@ -5,7 +5,8 @@ Strategy Engine — Signal generation at configurable triggers, executing Limit 
 import logging
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import OrderArgs, OrderType
 from py_clob_client.order_builder.constants import BUY
@@ -81,6 +82,9 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
     Executes at configured execution trigger targeting `next_window`.
     """
     last_signal_window = None
+    previous_signal = None
+    consecutive_signals = 0
+    trade_tz = ZoneInfo(config.TRADE_TIMEZONE)
 
     while True:
         active_window = state.get("active_window")
@@ -90,8 +94,8 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
             await asyncio.sleep(0.5)
             continue
             
-        now = datetime.now(timezone.utc)
-        seconds_to_close = (active_window.end_date - now).total_seconds()
+        now_utc = datetime.now(ZoneInfo("UTC"))
+        seconds_to_close = (active_window.end_date - now_utc).total_seconds()
         state["seconds_to_close"] = seconds_to_close
 
         if last_signal_window == active_window.slug:
@@ -128,8 +132,35 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
                 log.warning("SIGNAL FAILED: Price gap $%.2f < $%.2f threshold", gap, PRICE_GAP_THRESHOLD)
                 last_signal_window = active_window.slug
                 continue
+
+            # 1. Session Shield 🛡️
+            if config.USE_SESSION_SHIELD:
+                now_local = datetime.now(trade_tz)
+                current_time_str = now_local.strftime("%H:%M")
                 
-            log.info("SIGNAL VALIDATED: Preparing execution for %s", next_window.slug if next_window else "UNKNOWN")
+                if config.TRADE_START_TIME <= config.TRADE_END_TIME:
+                    is_trading_hours = config.TRADE_START_TIME <= current_time_str <= config.TRADE_END_TIME
+                else: 
+                    is_trading_hours = current_time_str >= config.TRADE_START_TIME or current_time_str <= config.TRADE_END_TIME
+
+                if not is_trading_hours:
+                    log.info("SESSION SHIELD: Outside trading hours (%s %s). Skipping trade.", current_time_str, config.TRADE_TIMEZONE)
+                    last_signal_window = active_window.slug
+                    continue
+
+            # 2. Confirmation Filter ✅
+            if signal_side == previous_signal:
+                consecutive_signals += 1
+            else:
+                previous_signal = signal_side
+                consecutive_signals = 1
+
+            if config.USE_CONFIRMATION_FILTER and consecutive_signals < 2:
+                log.info("CONFIRMATION FILTER: First signal %s after flip. Waiting for confirmation.", signal_side)
+                last_signal_window = active_window.slug
+                continue
+                
+            log.info("SIGNAL VALIDATED (Trend Confirmed): Preparing execution for %s", next_window.slug if next_window else "UNKNOWN")
 
             last_signal_window = active_window.slug
             state["active_signal"] = signal_side
@@ -145,7 +176,7 @@ async def strategy_loop(state: dict, client: ClobClient, portfolio=None) -> None
                 await asyncio.sleep(wait_time)
                 
             log.info("T-%.1fs TRIGGER: Executing FAK order for %s on %s...", EXECUTION_TRIGGER_SECONDS, signal_side, next_window.slug)
-            exec_ts = datetime.now(timezone.utc).isoformat()
+            exec_ts = datetime.now(ZoneInfo("UTC")).isoformat()
             
             # Use the target market's actual odds for execution pricing
             if signal_side == "UP":

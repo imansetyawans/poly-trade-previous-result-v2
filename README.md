@@ -9,6 +9,12 @@ A low-latency trading proxy for Polymarket 5-minute Up/Down BTC markets that tri
 - **Limit Execution & Slippage Tracking**: Generates FAK Limit orders scaled 3-ticks (+0.03c) above the currently quoted midline to enforce strict precision inside unpredictable market bursts.
 - **CSV Reporter**: Persists all quantitative metrics (latencies, signals, and price-gaps) directly into `trades.csv` for data analysis.
 
+## V2 Quant Optimizations
+- **Session Shield (Time Filter)**: Dynamically binds to any timezone via `zoneinfo` to restrict trading solely to high-winrate global market hours.
+- **Confirmation Filter**: Intelligently ignores the first signal generated after a directional trend flip, mathematically waiting for a confirmed streak to begin.
+- **Web3 Auto-Redemption**: Integrates an asynchronous background CTF module that directly claims winning Polymarket tokens and converts them into liquid USDC on-chain continually.
+
+
 ## Prerequisites
 
 - Python 3.9+

@@ -13,6 +13,7 @@ from src.market_scanner import market_discovery_loop
 from src.price_feed import price_feed_loop
 from src.odds_monitor import odds_feed_loop
 from src.strategy import strategy_loop
+from src.positions import position_loop
 from src.reporter import init_csv
 from src import config
 
@@ -97,6 +98,7 @@ async def run_bot(dry_run: bool = False):
             asyncio.create_task(price_feed_loop(state)),
             asyncio.create_task(odds_feed_loop(state, client)),
             asyncio.create_task(strategy_loop(state, client)),
+            asyncio.create_task(position_loop(client, state)),
             asyncio.create_task(print_state_loop(state))
         ]
 
