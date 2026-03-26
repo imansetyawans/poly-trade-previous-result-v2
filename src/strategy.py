@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
+from py_clob_client.clob_types import OrderArgs, OrderType, MarketOrderArgs, PartialCreateOrderOptions
 from py_clob_client.order_builder.constants import BUY
 from src.reporter import log_trade
 from src import config
@@ -49,19 +49,18 @@ async def submit_fak_order(client: ClobClient, market_id: str, token_id: str, tr
         loop = asyncio.get_event_loop()
         
         def _place():
-            order_args = OrderArgs(
-                price=limit_price,
-                size=shares,
+            # Use MarketOrderArgs + create_market_order() — the SDK handles all
+            # maker/taker amount precision internally. Using OrderArgs + create_order()
+            # causes 'invalid amounts' errors due to floating-point rounding in shares.
+            order_args = MarketOrderArgs(
+                token_id=token_id,
+                amount=trade_usd,       # raw dollar amount — SDK calculates shares
                 side=BUY,
-                token_id=token_id
+                price=limit_price,      # worst-case slippage limit (3 ticks above)
             )
-            # tick_size is REQUIRED — tells SDK to enforce 2dp precision on maker amount
-            # Must use PartialCreateOrderOptions object, NOT a plain dict
-            signed = client.create_order(
-                order_args,
-                options=PartialCreateOrderOptions(tick_size="0.01", neg_risk=False)
-            )
-            return client.post_order(signed, orderType=OrderType.FAK)
+            opts = PartialCreateOrderOptions(tick_size="0.01", neg_risk=False)
+            order = client.create_market_order(order_args, options=opts)
+            return client.post_order(order, orderType=OrderType.FAK)
 
         t0 = time.time()
         resp = await loop.run_in_executor(None, _place)
