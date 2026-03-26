@@ -25,9 +25,10 @@ async def submit_fak_order(client: ClobClient, market_id: str, token_id: str, tr
     """Submit a Limit FAK market order synchronously in an executor."""
     
     # 3-tick slippage simulation and limit bounds
-    # IMPORTANT: Polymarket requires exactly 2 decimal precision for Price (maker amount)
+    # Polymarket requires exactly 2 decimal precision for Price (maker amount)
+    # and max 4 decimal precision for Size (taker amount)
     limit_price = round(min(0.99, expected_price + 0.03), 2)
-    shares = round(trade_usd / limit_price, 2)
+    shares = round(trade_usd / limit_price, 4)
     
     if dry_run:
         log.info("[SIMULATION] Virtual FAK BUY %s @ Limit $%.2f (Shares: %.2f)", token_id[-6:], limit_price, shares)
@@ -54,7 +55,9 @@ async def submit_fak_order(client: ClobClient, market_id: str, token_id: str, tr
                 side=BUY,
                 token_id=token_id
             )
-            signed = client.create_order(order_args)
+            # tick_size="0.01" is REQUIRED — without it the SDK uses raw float precision
+            # causing the Polymarket API to reject with 'invalid amounts' error
+            signed = client.create_order(order_args, options={"tick_size": "0.01", "neg_risk": False})
             return client.post_order(signed, orderType=OrderType.FAK)
 
         t0 = time.time()
