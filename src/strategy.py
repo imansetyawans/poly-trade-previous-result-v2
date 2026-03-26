@@ -25,7 +25,8 @@ async def submit_fak_order(client: ClobClient, market_id: str, token_id: str, tr
     """Submit a Limit FAK market order synchronously in an executor."""
     
     # 3-tick slippage simulation and limit bounds
-    limit_price = min(0.99, expected_price + 0.03)
+    # IMPORTANT: Polymarket requires exactly 2 decimal precision for Price (maker amount)
+    limit_price = round(min(0.99, expected_price + 0.03), 2)
     shares = round(trade_usd / limit_price, 2)
     
     if dry_run:
